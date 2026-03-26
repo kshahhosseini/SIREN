@@ -1,7 +1,6 @@
 import os
 
 import fire
-import imageio.v2 as imageio
 import numpy as np
 import torch
 import torch.nn as nn
