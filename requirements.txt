@@ -1,0 +1,7 @@
+fire
+Pillow
+torch
+torchvision
+imageio
+omegaconf
+tensorboard

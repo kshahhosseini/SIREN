@@ -1,0 +1,36 @@
+#The name of the base configuration file containing common information. It will
+#be merged with this config when loaded.
+base_config: base_config.yaml
+
+#Name of the image under {this package directory}/data directory.
+data_name: cat.png 
+
+#If input_size: null provided no resize of input image will be performed.
+input_size: 
+  - 256
+  - 256
+
+#The batch_size will be total_pixels * batch_size_ratio.
+batch_size_ratio: 1.0
+
+#Directory where output data will be saved into. If null, it will be created
+#under {this package directory}/outputs.
+out_dir: null 
+
+#The logging level. Use options available in logging package.
+logging_level: "INFO" 
+
+#The id of the checkpoint to be resumed. If null, no checkpoint will be loaded.
+resume_ckpt_id: null 
+
+#The maximum number of epochs to run the training.
+num_epochs: 15000
+
+#How often (epochs) save a checkpoint. The last epoch will always be saved.
+ckpt_period: 5000 
+
+#How often write summary images (reconstructed image).
+summary_image_period: 100
+
+#How often write the scalar info (loss, PSNR, ... ).
+summary_scalar_period: 100

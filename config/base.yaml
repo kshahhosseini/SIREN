@@ -1,0 +1,27 @@
+#The model parameters
+model:
+  #The number of input featuers. For images it's 2 (x,y pixel location).
+  in_features: 2
+
+  #The number of output features of all layers.
+  out_features:
+  - 256
+  - 256
+  - 256
+  - 256
+  - 3
+
+  #The w0 in sin(w0*features) for all layers except first layer.
+  w0: 1.0
+
+  #The w0 in sin(w0*features) for the first layer. See the paper's section 3.2
+  #and supplemental materials for more details.
+  w0_initial: 30.0
+
+  #The parameter c in the section 3.2 of the paper.
+  c_val: 6.0
+
+#The optimizer parameters.
+optimizer:
+  #The learning rate.
+  lr: 1e-4
