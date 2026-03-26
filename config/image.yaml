@@ -3,7 +3,7 @@
 base_config: base_config.yaml
 
 #Name of the image under {this package directory}/data directory.
-data_name: cat.png 
+data_name: camera_man.png 
 
 #If input_size: null provided no resize of input image will be performed.
 input_size: 
