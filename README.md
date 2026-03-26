@@ -67,9 +67,9 @@ https://github.com/user-attachments/assets/8d017e25-6597-4ccc-92ab-93c642e1b8ee
 ![Step 0](./assets/cat/000000.png)
 ![Step 50](./assets/cat/000050.png)
 ![Step 100](./assets/cat/000100.png)
-![Step 500](./assets/cat/000500.png)
+![Step 1000](./assets/cat/001000.png)
 ![Step 5000](./assets/cat/005000.png)
-![Step 9990](./assets/cat/009990.png)
+![Step 14990](./assets/cat/014990.png)
 
 **Reconstruction Video:**
 
