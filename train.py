@@ -12,30 +12,23 @@ from torchvision import transforms
 from utils import ensure_number, load_config, setup_logging
 
 
-def psnr(mse: Tensor, max_val=1.0) -> Tensor:
+def psnr(mse: Tensor, max_val: Tensor) -> Tensor:
     """Computes PSNR based on input MSE value.
 
     Args:
         mse:
             The input MSE value. It must be <= max_val**2.
         max_val:
-            Max possible value of tensor e.g. for uint8 images it's 255.
-            Defaults to 1.0 for tensors normalized to (0.0,1.0).
+            Max possible value of tensor used in MSE computation e.g. for uint8
+            images it's 255 or 1.0 for tensors normalized to (0.0,1.0).
 
     Returns:
         The computed PSNR value.
     """
-    mse = ensure_number(
-        num=mse,
-        min_val=0.0,
-        min_inclusive=True,
-        max_val=max_val**2,
-        max_inclusive=True,
-    )
     if mse == 0.0:
         return float("inf")
 
-    return 20 * torch.log10(torch.tensor(max_val)) - 10 * torch.log10(mse)
+    return 20 * torch.log10(max_val) - 10 * torch.log10(mse)
 
 
 def init_siren(
@@ -61,8 +54,6 @@ def init_siren(
     w0 = ensure_number(num=w0, min_val=0.0, min_inclusive=False)
     c_val = ensure_number(num=c_val, min_val=1.0, min_inclusive=True)
 
-    if not hasattr(layer, "weight"):
-        return
     with torch.no_grad():
         in_features = layer.weight.size(1)
 
@@ -149,10 +140,10 @@ class SIREN(nn.Module):
         # We need to at have at least 2 layers based on the paper.
         ensure_number(num=len(out_features), min_val=2, min_inclusive=True)
 
-        for i, num_features in enumerate(out_features):
-            out_features[i] = ensure_number(
-                num=num_features, min_val=1, min_inclusive=True
-            )
+        out_features = [
+            ensure_number(num=out_feature, min_val=1, min_inclusive=True)
+            for out_feature in out_features
+        ]
 
         self._w0 = ensure_number(num=w0, min_val=0.0, min_inclusive=False)
         self._w0_initial = ensure_number(
@@ -205,7 +196,7 @@ class SIREN(nn.Module):
     def _init(self, layers: list[nn.Module]) -> None:
         """Initializes the model's first and remaining layers.
 
-        The initialization is done based on section 3.2 and supramental
+        The initialization is done based on section 3.2 and supplemental
         materials in the paper.
 
         Args:
@@ -213,6 +204,8 @@ class SIREN(nn.Module):
                 The layers of the model.
         """
         for i, layer in enumerate(layers):
+            if not isinstance(layer, nn.Linear):
+                continue
             if i == 0:
                 init_siren(
                     layer=layer,
@@ -253,6 +246,7 @@ def transform_image_to_pixel_location_colors(
             image: Shape (H,W,3)
                 The resized image.
     """
+    transform_list = []
     if size is not None:
         # Ensure size has only 2 elements and each is >= 1.
         ensure_number(
@@ -265,15 +259,12 @@ def transform_image_to_pixel_location_colors(
         ensure_number(num=size[0], min_val=1, min_inclusive=True)
         ensure_number(num=size[1], min_val=1, min_inclusive=True)
 
+        transform_list.append(transforms.Resize(size))
+
+    transform_list.append(transforms.ToTensor())
+
     # Compose transforms to be applied to the input image.
-    transform = transforms.Compose(
-        []
-        if size is None
-        else [transforms.Resize(size)]
-        + [
-            transforms.ToTensor(),  # Normalize input to [0,1] range
-        ]
-    )
+    transform = transforms.Compose(transform_list)
 
     # Apply transforms.
     img = transform(image)  # Output shape: (3, H, W)
@@ -371,6 +362,10 @@ class SirenNetwork:
             config_name = config_name + ".yaml"
         self.config = load_config(config_name)
 
+        # set random seed
+        seed = self.config["seed"]
+        self._set_seed(seed)
+
         # Make the required output directories.
         self._make_output_dirs()
 
@@ -391,9 +386,10 @@ class SirenNetwork:
         # Load data
         image = Image.open(self.config["data_path"]).convert("RGB")
 
+        input_size = self.config.get("input_size", None)
         data_info = transform_image_to_pixel_location_colors(
             image,
-            size=tuple(self.config["input_size"]),
+            size=tuple(input_size) if input_size is not None else input_size,
         )
         coords = data_info["coords"]
         colors = data_info["colors"]
@@ -425,14 +421,16 @@ class SirenNetwork:
             **self.config["optimizer"],
         )
 
+        self.model = self.model.to(self.device)
+
         # Resume the network state based on the input checkpoint id.
         self._resume(self.config["resume_ckpt_id"])
-
-        self.model = self.model.to(self.device)
 
         loss_function = nn.MSELoss()
 
         writer = SummaryWriter(log_dir=self.config["summaries"])
+
+        max_mse_input_val = torch.tensor(1.0, device=self.device)
 
         while self.epoch < self.config["num_epochs"]:
             self.model.train()
@@ -465,7 +463,10 @@ class SirenNetwork:
                 # Compute PSNR and write both loss and PSNR to tensorboard.
                 writer.add_scalar("Scalars/Loss", epoch_loss, self.epoch)
 
-                psnr_val = psnr(mse=torch.tensor(epoch_loss), max_val=1.0)
+                psnr_val = psnr(
+                    mse=torch.tensor(epoch_loss),
+                    max_val=max_mse_input_val,
+                )
                 self.logger.info(
                     f"Epoch: {self.epoch} | Loss: {epoch_loss:.6f} | PSNR: {psnr_val:.6f}",
                 )
@@ -561,7 +562,7 @@ class SirenNetwork:
             return
 
         ckpt_path = self._make_ckpt_path(ckpt_id)
-        ckpt = torch.load(ckpt_path)
+        ckpt = torch.load(ckpt_path, map_location=self.device)
 
         # Load the last epoch processed.
         self.epoch = ckpt["epoch"]
@@ -573,6 +574,18 @@ class SirenNetwork:
         self.model.load_state_dict(ckpt["model"])
 
         self.logger.info(f"Resumed network state from {ckpt_path}")
+
+    def _set_seed(self, seed: int = 0) -> None:
+        """Sets seed for random ops to ensure reproducibility.
+
+        Args:
+            seed:
+                The input seed.
+        """
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)  # Ensures reproducibility on GPU
 
 
 def run_siren_network(config_name: str = "image.yaml") -> None:
