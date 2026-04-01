@@ -25,3 +25,6 @@ model:
 optimizer:
   #The learning rate.
   lr: 1e-4
+
+#seed for random ops to make the process reproducible.
+seed: 0
